@@ -268,8 +268,6 @@
   .admin-btn-primary:hover { background: var(--btn-primary-hover); }
   .admin-btn-secondary { background: var(--inner-card); color: var(--text-main); border: 1px solid var(--input-border); }
   .admin-btn-secondary:hover { background: var(--glass-bg-strong); }
-  .admin-btn-danger { background: rgba(255, 59, 48, 0.15); color: var(--color-red); }
-  .admin-btn-danger:hover { background: rgba(255, 59, 48, 0.3); }
   .admin-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-top: 8px; }
   .cloud-status { font-size: 12px; padding: 6px 10px; border-radius: 8px; display: inline-block; margin-bottom: 12px; }
   .cloud-ok { background: rgba(52, 199, 89, 0.15); color: var(--color-green); }
@@ -332,7 +330,6 @@
 
 <footer id="siteFooter">© 2026 Центр развития и творчества «Мозаика». Все права защищены.</footer>
 
-<!-- ===== АДМИН-ПАНЕЛЬ ===== -->
 <div class="admin-overlay" id="adminPanel" onclick="if(event.target===this)closeAdmin()">
   <div class="admin-panel" onclick="event.stopPropagation()">
     <div class="admin-header">
@@ -340,7 +337,7 @@
       <button class="remove-btn" onclick="closeAdmin()">✕</button>
     </div>
 
-    <div class="cloud-status cloud-loading" id="cloudStatus">☁️ Подключение к облаку...</div>
+    <div class="cloud-status cloud-loading" id="cloudStatus">☁️ Подключение...</div>
 
     <div class="admin-tabs">
       <button class="admin-tab active" onclick="switchTab('settings', this)">Настройки</button>
@@ -366,15 +363,13 @@
     </div>
 
     <div class="admin-tab-content" id="tab-export">
-      <p class="admin-hint">
-        Все правки автоматически сохраняются в облако (JSONBin) — их сразу видят все посетители.
-      </p>
+      <p class="admin-hint">Правки автоматически сохраняются в Firebase — их сразу видят все посетители.</p>
       <div style="margin-top: 16px;">
         <button class="admin-btn admin-btn-primary" onclick="forceSyncFromCloud()">🔄 Загрузить из облака заново</button>
-        <button class="admin-btn admin-btn-secondary" onclick="exportJSON()">📥 Скачать JSON (резервная копия)</button>
+        <button class="admin-btn admin-btn-secondary" onclick="exportJSON()">📥 Скачать JSON</button>
       </div>
       <div style="margin-top: 16px;">
-        <button class="admin-btn admin-btn-secondary" onclick="document.getElementById('importFile').click()">📤 Импортировать JSON в облако</button>
+        <button class="admin-btn admin-btn-secondary" onclick="document.getElementById('importFile').click()">📤 Импортировать JSON</button>
         <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importJSON(event)">
       </div>
     </div>
@@ -388,13 +383,9 @@
 
 <script>
   // ============================================================
-  // НАСТРОЙКИ ОБЛАКА (JSONBin)
+  // FIREBASE URL
   // ============================================================
-  const JSONBIN_CONFIG = {
-    binId: '6acdf5f3ac621605a2d0584',
-    accessKey: '$2a$10$EMDy3YM4aMo/9adedUW4v.4UfEHHq/4NnH7jbBCk7CR1uvupW.kKO',
-    apiUrl: 'https://api.jsonbin.io/v3/b'
-  };
+  const FIREBASE_URL = 'https://mozaika-4d1e7-default-rtdb.firebaseio.com';
 
   const ADMIN_PASSWORD = `sozjdho982+8#9_($;(299? '! V92(2;9"`;
   const STORAGE_KEY = 'mosaic_data';
@@ -424,44 +415,35 @@
   let cart = JSON.parse(localStorage.getItem('mosaic_cart') || '[]');
   let cloudOnline = false;
 
-  // ============================================================
-  // ОБЛАКО
-  // ============================================================
   async function loadFromCloud() {
-    setCloudStatus('loading', '☁️ Загрузка из облака...');
+    setCloudStatus('loading', '☁️ Загрузка...');
     try {
-      const res = await fetch(`${JSONBIN_CONFIG.apiUrl}/${JSONBIN_CONFIG.binId}/latest`, {
-        headers: { 'X-Access-Key': JSONBIN_CONFIG.accessKey }
-      });
+      const res = await fetch(`${FIREBASE_URL}/data.json`);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      const record = json.record || json;
+      const record = await res.json();
       if (record && record.settings && Array.isArray(record.lessons)) {
         if (record.lessons.length > MAX_LESSONS) record.lessons = record.lessons.slice(0, MAX_LESSONS);
         DATA = record;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
         cloudOnline = true;
-        setCloudStatus('ok', '☁️ Синхронизировано с облаком');
+        setCloudStatus('ok', '☁️ Синхронизировано');
         renderSite();
       } else {
-        throw new Error('Неверный формат данных');
+        await saveToCloud();
+        setCloudStatus('ok', '☁️ Создано в облаке');
       }
     } catch (e) {
-      console.warn('Облако недоступно:', e);
       cloudOnline = false;
-      setCloudStatus('error', '⚠️ ' + (e.message || 'Облако недоступно'));
+      setCloudStatus('error', '⚠️ ' + (e.message || 'Нет связи'));
     }
   }
 
   async function saveToCloud() {
-    setCloudStatus('loading', '☁️ Сохранение в облако...');
+    setCloudStatus('loading', '☁️ Сохранение...');
     try {
-      const res = await fetch(`${JSONBIN_CONFIG.apiUrl}/${JSONBIN_CONFIG.binId}`, {
+      const res = await fetch(`${FIREBASE_URL}/data.json`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Access-Key': JSONBIN_CONFIG.accessKey
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(DATA)
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -469,9 +451,8 @@
       setCloudStatus('ok', '✅ Сохранено в облако');
       return true;
     } catch (e) {
-      console.error('Ошибка сохранения:', e);
       cloudOnline = false;
-      setCloudStatus('error', '❌ ' + (e.message || 'Не удалось сохранить'));
+      setCloudStatus('error', '❌ ' + (e.message || 'Ошибка'));
       return false;
     }
   }
@@ -483,12 +464,8 @@
     el.textContent = text;
   }
 
-  // ============================================================
-  // ТЕМА
-  // ============================================================
   const themeBtn = document.getElementById('themeBtn');
   const savedTheme = localStorage.getItem('mosaic_theme') || 'light';
-
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     themeBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
@@ -500,12 +477,8 @@
     applyTheme(current === 'dark' ? 'light' : 'dark');
   }
 
-  // ============================================================
-  // ШЕСТИУГОЛЬНИКИ
-  // ============================================================
   const HEX_COLORS = ['#ff4b4b', '#007aff', '#ffcc00', '#34c759'];
   const HEX_COUNT = 25;
-
   function hexSvg(color, gradId, baseOpacity) {
     return `
       <svg class="hex" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -523,7 +496,6 @@
       </svg>
     `;
   }
-
   function createHexagons() {
     const bg = document.getElementById('hexBg');
     const theme = document.documentElement.getAttribute('data-theme') || 'light';
@@ -554,7 +526,6 @@
       bg.appendChild(svg);
     }
   }
-
   function recolorHexagons(theme) {
     const baseOpacity = theme === 'dark' ? 0.55 : 0.7;
     document.querySelectorAll('.hex').forEach(svg => {
@@ -568,7 +539,6 @@
       svg.style.setProperty('--hex-glow', hexToRgba(color, theme === 'dark' ? 0.5 : 0.35));
     });
   }
-
   function hexToRgba(hex, a) {
     const h = hex.replace('#', '');
     const r = parseInt(h.substring(0, 2), 16);
@@ -577,9 +547,6 @@
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
 
-  // ============================================================
-  // ОТРИСОВКА
-  // ============================================================
   function renderSite() {
     const s = DATA.settings;
     document.getElementById('siteLogoText').textContent = s.siteName;
@@ -592,13 +559,11 @@
     renderCatalog();
     renderCart();
   }
-
   function saveCart() {
     localStorage.setItem('mosaic_cart', JSON.stringify(cart));
     renderCatalog();
     renderCart();
   }
-
   function toggleCart(id) {
     const lesson = DATA.lessons.find(l => l.id === id);
     if (!lesson) return;
@@ -607,7 +572,6 @@
     else cart.push(lesson);
     saveCart();
   }
-
   function renderCatalog() {
     const catalog = document.getElementById('catalog');
     catalog.innerHTML = DATA.lessons.map(l => {
@@ -625,7 +589,6 @@
     }).join('');
     document.getElementById('cart-count').textContent = cart.length;
   }
-
   function renderCart() {
     const container = document.getElementById('cart-items-container');
     const totalRow = document.getElementById('total-row');
@@ -633,7 +596,6 @@
     const orderText = document.getElementById('order-text');
     const tgLink = document.getElementById('tg-link');
     const maxLink = document.getElementById('max-link');
-
     if (cart.length === 0) {
       container.innerHTML = '<div class="empty-cart">Ваша корзина пуста 🎨</div>';
       totalRow.style.display = 'none';
@@ -641,7 +603,6 @@
       orderText.value = '';
       return;
     }
-
     container.innerHTML = cart.map(item => `
       <div class="cart-item">
         <span>${escapeHtml(item.title)}</span>
@@ -649,11 +610,9 @@
         <button class="remove-btn" onclick="toggleCart(${item.id})">✕</button>
       </div>
     `).join('');
-
     const total = cart.reduce((sum, item) => sum + Number(item.price), 0);
     document.getElementById('cart-total').textContent = total + ' ₽';
     totalRow.style.display = 'flex';
-
     const text =
 `Здравствуйте, ${DATA.settings.managerName}!
 Я хочу записаться на занятия в центр «${DATA.settings.siteName}»:
@@ -663,70 +622,52 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
 Итого: ${total} ₽
 
 Подскажите, пожалуйста, как можно оформиться?`;
-
     orderText.value = text;
     orderActions.style.display = 'flex';
-
     const encodedText = encodeURIComponent(text);
     tgLink.href = DATA.settings.tg + '?text=' + encodedText;
     maxLink.href = DATA.settings.max;
   }
-
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
-
   function openCart() { document.getElementById('cart-modal').classList.add('open'); }
   function closeCart(e) {
     if (e && e.target !== e.currentTarget) return;
     document.getElementById('cart-modal').classList.remove('open');
   }
-
   function copyOrder() {
     const textarea = document.getElementById('order-text');
     textarea.select();
     textarea.setSelectionRange(0, 99999);
     try {
-      navigator.clipboard.writeText(textarea.value).then(() => {
-        alert('✅ Заказ скопирован! Вставьте его в чат с менеджером.');
-      });
+      navigator.clipboard.writeText(textarea.value).then(() => alert('✅ Заказ скопирован!'));
     } catch (err) {
       document.execCommand('copy');
-      alert('✅ Заказ скопирован! Вставьте его в чат с менеджером.');
+      alert('✅ Заказ скопирован!');
     }
   }
 
-  // ============================================================
-  // АДМИН-ПАНЕЛЬ
-  // ============================================================
   let adminOpened = false;
-
   function openAdmin() {
     if (adminOpened) return;
     const pass = prompt('🔐 Введите пароль администратора:');
     if (pass === null) return;
-    if (pass !== ADMIN_PASSWORD) {
-      alert('❌ Неверный пароль');
-      return;
-    }
+    if (pass !== ADMIN_PASSWORD) { alert('❌ Неверный пароль'); return; }
     adminOpened = true;
     loadAdminFields();
     document.getElementById('adminPanel').classList.add('open');
-    if (cloudOnline) setCloudStatus('ok', '☁️ Синхронизировано с облаком');
   }
-
   function closeAdmin() {
     document.getElementById('adminPanel').classList.remove('open');
     adminOpened = false;
   }
-
   function switchTab(name, btn) {
     document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + name).classList.add('active');
   }
-
   function loadAdminFields() {
     const s = DATA.settings;
     document.getElementById('f-siteName').value = s.siteName;
@@ -740,7 +681,6 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     document.getElementById('f-footer').value = s.footer;
     renderAdminLessons();
   }
-
   function renderAdminLessons() {
     const list = document.getElementById('adminLessonsList');
     const count = DATA.lessons.length;
@@ -766,32 +706,22 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
       `).join('')}
     `;
   }
-
-  function escapeAttr(str) {
-    return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  }
-
+  function escapeAttr(str) { return String(str).replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
   function updateLesson(index, field, value) {
     if (field === 'price') value = Number(value) || 0;
     DATA.lessons[index][field] = value;
   }
-
   function addLesson() {
-    if (DATA.lessons.length >= MAX_LESSONS) {
-      alert(`⚠️ Достигнут лимит — максимум ${MAX_LESSONS} занятий.\n\nУдали что-нибудь ненужное, чтобы добавить новое.`);
-      return;
-    }
+    if (DATA.lessons.length >= MAX_LESSONS) { alert(`⚠️ Максимум ${MAX_LESSONS} занятий.`); return; }
     const newId = DATA.lessons.length ? Math.max(...DATA.lessons.map(l => l.id)) + 1 : 1;
     DATA.lessons.push({ id: newId, title: 'Новое занятие', price: 1000, desc: 'Описание занятия' });
     renderAdminLessons();
   }
-
   function deleteLesson(index) {
     if (!confirm('Удалить это занятие?')) return;
     DATA.lessons.splice(index, 1);
     renderAdminLessons();
   }
-
   async function saveAdmin() {
     DATA.settings.siteName = document.getElementById('f-siteName').value;
     DATA.settings.siteSubtitle = document.getElementById('f-siteSubtitle').value;
@@ -802,30 +732,20 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     DATA.settings.max = document.getElementById('f-max').value;
     DATA.settings.managerName = document.getElementById('f-managerName').value;
     DATA.settings.footer = document.getElementById('f-footer').value;
-
     localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
     const ok = await saveToCloud();
     renderSite();
-
-    if (ok) {
-      alert('✅ Сохранено в облако! Изменения сразу видны всем посетителям.');
-    } else {
-      alert('⚠️ Сохранено локально, но не улетело в облако.');
-    }
+    alert(ok ? '✅ Сохранено в облако!' : '⚠️ Сохранено локально, но не в облако');
   }
-
   async function forceSyncFromCloud() {
-    if (!confirm('Загрузить данные из облака заново? Несохранённые локальные правки будут потеряны.')) return;
+    if (!confirm('Загрузить из облака заново?')) return;
     await loadFromCloud();
     loadAdminFields();
-    alert('✅ Данные загружены из облака');
   }
-
   function exportJSON() {
     const blob = new Blob([JSON.stringify(DATA, null, 2)], { type: 'application/json' });
     downloadBlob(blob, 'mosaic-data.json');
   }
-
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -836,7 +756,6 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-
   function importJSON(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -845,26 +764,18 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
       try {
         const parsed = JSON.parse(e.target.result);
         if (!parsed.settings || !Array.isArray(parsed.lessons)) throw new Error('bad format');
-        if (parsed.lessons.length > MAX_LESSONS) {
-          alert(`⚠️ В файле ${parsed.lessons.length} занятий. Обрезано до ${MAX_LESSONS}.`);
-          parsed.lessons = parsed.lessons.slice(0, MAX_LESSONS);
-        }
+        if (parsed.lessons.length > MAX_LESSONS) parsed.lessons = parsed.lessons.slice(0, MAX_LESSONS);
         DATA = parsed;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
         renderSite();
         loadAdminFields();
-        const ok = await saveToCloud();
-        alert(ok ? '✅ Импортировано и залито в облако!' : '⚠️ Импортировано локально.');
-      } catch (err) {
-        alert('❌ Ошибка: файл повреждён или не того формата');
-      }
+        await saveToCloud();
+        alert('✅ Импортировано');
+      } catch (err) { alert('❌ Ошибка формата файла'); }
     };
     reader.readAsText(file);
   }
 
-  // ============================================================
-  // СЕКРЕТНЫЙ ДОСТУП
-  // ============================================================
   if (location.hash === '#admin' || location.search.includes('admin')) {
     setTimeout(openAdmin, 600);
   }
@@ -879,15 +790,9 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     logoClicks++;
     clearTimeout(logoTimer);
     logoTimer = setTimeout(() => logoClicks = 0, 600);
-    if (logoClicks >= 3) {
-      logoClicks = 0;
-      openAdmin();
-    }
+    if (logoClicks >= 3) { logoClicks = 0; openAdmin(); }
   });
 
-  // ============================================================
-  // СТАРТ
-  // ============================================================
   createHexagons();
   applyTheme(savedTheme);
   renderSite();

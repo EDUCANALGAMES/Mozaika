@@ -388,17 +388,17 @@
 
 <script>
   // ============================================================
-  // НАСТРОЙКИ ОБЛАКА (JSONBin)
+  // НАСТРОЙКИ ОБЛАКА (JSONBin) — используется ACCESS KEY
   // ============================================================
   const JSONBIN_CONFIG = {
     binId: '6acdf5f3ac621605a2d0584',
-    masterKey: '$2a$10$YB9ij5y.Hr4QAWaNN.yejefrVlqeQ4Z16YdPc6AKIHhmZBRjznmAq',
+    accessKey: '$2a$10$bLBLz2gNFCYmYJDt6mPrzufrm1V6djqM4ONEypsdrtVCopiLVefjW',
     apiUrl: 'https://api.jsonbin.io/v3/b'
   };
 
   const ADMIN_PASSWORD = `sozjdho982+8#9_($;(299? '! V92(2;9"`;
   const STORAGE_KEY = 'mosaic_data';
-  const MAX_LESSONS = 500;   // ← ЛИМИТ ЗАНЯТИЙ
+  const MAX_LESSONS = 500;
 
   const DEFAULT_DATA = {
     settings: {
@@ -431,7 +431,7 @@
     setCloudStatus('loading', '☁️ Загрузка из облака...');
     try {
       const res = await fetch(`${JSONBIN_CONFIG.apiUrl}/${JSONBIN_CONFIG.binId}/latest`, {
-        headers: { 'X-Master-Key': JSONBIN_CONFIG.masterKey }
+        headers: { 'X-Access-Key': JSONBIN_CONFIG.accessKey }
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
@@ -449,7 +449,7 @@
     } catch (e) {
       console.warn('Облако недоступно:', e);
       cloudOnline = false;
-      setCloudStatus('error', '⚠️ Облако недоступно — показаны локальные данные');
+      setCloudStatus('error', '⚠️ ' + (e.message || 'Облако недоступно'));
     }
   }
 
@@ -460,7 +460,7 @@
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'X-Master-Key': JSONBIN_CONFIG.masterKey
+          'X-Access-Key': JSONBIN_CONFIG.accessKey
         },
         body: JSON.stringify(DATA)
       });
@@ -471,7 +471,7 @@
     } catch (e) {
       console.error('Ошибка сохранения:', e);
       cloudOnline = false;
-      setCloudStatus('error', '❌ Не удалось сохранить в облако (проверь интернет)');
+      setCloudStatus('error', '❌ ' + (e.message || 'Не удалось сохранить'));
       return false;
     }
   }
@@ -578,7 +578,7 @@
   }
 
   // ============================================================
-  // ОТРИСОВКА САЙТА
+  // ОТРИСОВКА
   // ============================================================
   function renderSite() {
     const s = DATA.settings;
@@ -666,7 +666,6 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
 
     orderText.value = text;
     orderActions.style.display = 'flex';
-    try { navigator.clipboard?.writeText(text); } catch (e) {}
 
     const encodedText = encodeURIComponent(text);
     tgLink.href = DATA.settings.tg + '?text=' + encodedText;
@@ -746,15 +745,12 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     const list = document.getElementById('adminLessonsList');
     const count = DATA.lessons.length;
     const isLimit = count >= MAX_LESSONS;
-
-    // Обновляем состояние кнопки "Добавить"
     const addBtn = document.getElementById('addLessonBtn');
     if (addBtn) {
       addBtn.disabled = isLimit;
       addBtn.style.opacity = isLimit ? '0.5' : '1';
       addBtn.style.cursor = isLimit ? 'not-allowed' : 'pointer';
     }
-
     list.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:13px; color:var(--text-muted);">
         <span>📚 Занятий: <b style="color:${isLimit ? 'var(--color-red)' : 'var(--text-main)'}">${count} / ${MAX_LESSONS}</b></span>
@@ -814,7 +810,7 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
     if (ok) {
       alert('✅ Сохранено в облако! Изменения сразу видны всем посетителям.');
     } else {
-      alert('⚠️ Сохранено локально, но не улетело в облако.\nПроверь интернет и попробуй ещё раз.');
+      alert('⚠️ Сохранено локально, но не улетело в облако.');
     }
   }
 
@@ -858,7 +854,7 @@ ${cart.map(i => `• ${i.title} — ${i.price} ₽`).join('\n')}
         renderSite();
         loadAdminFields();
         const ok = await saveToCloud();
-        alert(ok ? '✅ Импортировано и залито в облако!' : '⚠️ Импортировано локально, но не улетело в облако.');
+        alert(ok ? '✅ Импортировано и залито в облако!' : '⚠️ Импортировано локально.');
       } catch (err) {
         alert('❌ Ошибка: файл повреждён или не того формата');
       }
